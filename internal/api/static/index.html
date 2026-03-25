@@ -23,6 +23,31 @@
       </div>
     </div>
     <div class="stats" id="stats"></div>
+    <details class="api-docs">
+      <summary>API</summary>
+      <div class="api-list">
+        <div class="api-item">
+          <code>GET /api/v1/random</code>
+          <span>Random duck (JSON). Params: <code>?type=gif|jpg</code> <code>?redirect=true</code></span>
+        </div>
+        <div class="api-item">
+          <code>GET /api/v1/random/gif</code>
+          <span>Random GIF</span>
+        </div>
+        <div class="api-item">
+          <code>GET /api/v1/random/image</code>
+          <span>Random image</span>
+        </div>
+        <div class="api-item">
+          <code>GET /api/v1/count</code>
+          <span>Collection stats</span>
+        </div>
+        <div class="api-item">
+          <code>POST /api/v1/scrape</code>
+          <span>Trigger scrape run</span>
+        </div>
+      </div>
+    </details>
   </div>
   <script src="/app.js"></script>
 </body>
