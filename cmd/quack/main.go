@@ -111,7 +111,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      api.NewServer(sched, s3Client, cfg.MinIO.PublicURL, cfg.Server.AdminToken, logger),
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 0, // disabled for streaming endpoints (moderate)
 		IdleTimeout:  60 * time.Second,
 	}
 
