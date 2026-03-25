@@ -146,3 +146,40 @@ func (s *Store) AllKeys() []string {
 	})
 	return keys
 }
+
+// RemoveByKey removes an object key from the index.
+// Seen records are preserved to prevent re-scraping deleted content.
+func (s *Store) RemoveByKey(objectKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(indexBucket).Delete([]byte(objectKey))
+	})
+}
+
+// DecrementCount decrements the count for the given type ("images" or "gifs").
+func (s *Store) DecrementCount(mediaType string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := imagesKey
+	if mediaType == "gifs" {
+		key = gifsKey
+	}
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(countsBucket)
+		val := b.Get(key)
+		var count uint64
+		if val != nil {
+			count = binary.BigEndian.Uint64(val)
+		}
+		if count > 0 {
+			count--
+		}
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, count)
+		return b.Put(key, buf)
+	})
+}
