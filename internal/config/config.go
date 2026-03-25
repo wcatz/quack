@@ -35,9 +35,10 @@ type StorageConfig struct {
 }
 
 type ScraperConfig struct {
-	GalleryDLPath string `mapstructure:"galleryDlPath"`
-	DownloadDir   string `mapstructure:"downloadDir"`
-	Concurrency   int    `mapstructure:"concurrency"`
+	GalleryDLPath  string `mapstructure:"galleryDlPath"`
+	DownloadDir    string `mapstructure:"downloadDir"`
+	Concurrency    int    `mapstructure:"concurrency"`
+	NitterInstance string `mapstructure:"nitterInstance"`
 }
 
 type Source struct {

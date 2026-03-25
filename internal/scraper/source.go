@@ -6,6 +6,8 @@ import "github.com/wcatz/quack/internal/config"
 const (
 	TypeGalleryDL = "gallery-dl"
 	TypeHTTPAPI   = "http-api"
+	TypeReddit    = "reddit"
+	TypeNitter    = "nitter"
 )
 
 // SourceFromConfig converts a config.Source to the scraper's internal representation.
@@ -22,7 +24,7 @@ func SourceFromConfig(src config.Source) Source {
 // Source defines a scrape target.
 type Source struct {
 	Name     string
-	Type     string // TypeGalleryDL or TypeHTTPAPI
+	Type     string // TypeGalleryDL, TypeHTTPAPI, TypeReddit, or TypeNitter
 	URL      string
 	Schedule string
 	Args     []string
