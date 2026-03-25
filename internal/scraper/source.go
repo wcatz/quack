@@ -8,6 +8,7 @@ const (
 	TypeHTTPAPI   = "http-api"
 	TypeReddit    = "reddit"
 	TypeNitter    = "nitter"
+	TypeTenor     = "tenor"
 )
 
 // SourceFromConfig converts a config.Source to the scraper's internal representation.
