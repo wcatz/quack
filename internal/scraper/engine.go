@@ -4,27 +4,31 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
 
 type Engine struct {
-	galleryDLPath string
-	downloadDir   string
-	httpClient    *http.Client
-	logger        *slog.Logger
+	galleryDLPath  string
+	downloadDir    string
+	nitterInstance string
+	httpClient     *http.Client
+	logger         *slog.Logger
 }
 
-func NewEngine(galleryDLPath, downloadDir string, logger *slog.Logger) *Engine {
+func NewEngine(galleryDLPath, downloadDir, nitterInstance string, logger *slog.Logger) *Engine {
 	return &Engine{
-		galleryDLPath: galleryDLPath,
-		downloadDir:   downloadDir,
+		galleryDLPath:  galleryDLPath,
+		downloadDir:    downloadDir,
+		nitterInstance: nitterInstance,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -39,6 +43,10 @@ func (e *Engine) Scrape(ctx context.Context, src Source) ([]Result, error) {
 		return e.scrapeGalleryDL(ctx, src)
 	case TypeHTTPAPI:
 		return e.scrapeHTTPAPI(ctx, src)
+	case TypeReddit:
+		return e.scrapeReddit(ctx, src)
+	case TypeNitter:
+		return e.scrapeNitter(ctx, src)
 	default:
 		return nil, fmt.Errorf("unknown source type: %s", src.Type)
 	}
@@ -215,4 +223,237 @@ func (e *Engine) scrapeHTTPAPI(ctx context.Context, src Source) ([]Result, error
 			Extension: ext,
 		},
 	}, nil
+}
+
+// scrapeReddit fetches posts from Reddit's JSON API and extracts image URLs.
+func (e *Engine) scrapeReddit(ctx context.Context, src Source) ([]Result, error) {
+	jsonURL := strings.TrimSuffix(src.URL, "/") + "/hot.json?limit=100&raw_json=1"
+
+	e.logger.Info("fetching reddit JSON", "source", src.Name, "url", jsonURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jsonURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "quack-scraper/1.0 (duck image collector)")
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", jsonURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch %s: status %d", jsonURL, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var listing redditListing
+	if err := json.Unmarshal(body, &listing); err != nil {
+		return nil, fmt.Errorf("parse reddit JSON: %w", err)
+	}
+
+	var results []Result
+	for _, child := range listing.Data.Children {
+		post := child.Data
+		if post.IsSelf || post.URL == "" {
+			continue
+		}
+
+		// Direct image links (i.redd.it, i.imgur.com, etc.)
+		imageURL := ""
+		if isImageURL(post.URL) {
+			imageURL = post.URL
+		} else if post.Preview != nil && len(post.Preview.Images) > 0 {
+			// Use preview source as fallback
+			imageURL = post.Preview.Images[0].Source.URL
+		}
+
+		if imageURL == "" {
+			continue
+		}
+
+		ext := filepath.Ext(imageURL)
+		if idx := strings.Index(ext, "?"); idx > 0 {
+			ext = ext[:idx]
+		}
+		if ext == "" {
+			ext = ".jpg"
+		}
+
+		results = append(results, Result{
+			URL:       imageURL,
+			Source:    src.Name,
+			SourceID:  post.ID,
+			SourceURL: "https://www.reddit.com" + post.Permalink,
+			Extension: ext,
+		})
+	}
+
+	e.logger.Info("reddit scrape completed", "source", src.Name, "results", len(results))
+	return results, nil
+}
+
+type redditListing struct {
+	Data struct {
+		Children []struct {
+			Data redditPost `json:"data"`
+		} `json:"children"`
+	} `json:"data"`
+}
+
+type redditPost struct {
+	ID        string         `json:"id"`
+	Title     string         `json:"title"`
+	URL       string         `json:"url"`
+	Permalink string         `json:"permalink"`
+	IsSelf    bool           `json:"is_self"`
+	PostHint  string         `json:"post_hint"`
+	Preview   *redditPreview `json:"preview"`
+}
+
+type redditPreview struct {
+	Images []struct {
+		Source struct {
+			URL string `json:"url"`
+		} `json:"source"`
+	} `json:"images"`
+}
+
+func isImageURL(u string) bool {
+	lower := strings.ToLower(u)
+	for _, ext := range []string{".jpg", ".jpeg", ".png", ".gif", ".webp"} {
+		if strings.HasSuffix(lower, ext) || strings.Contains(lower, ext+"?") {
+			return true
+		}
+	}
+	// Known image hosts
+	return strings.Contains(lower, "i.redd.it") ||
+		strings.Contains(lower, "i.imgur.com")
+}
+
+// scrapeNitter fetches media from a Nitter instance RSS feed.
+func (e *Engine) scrapeNitter(ctx context.Context, src Source) ([]Result, error) {
+	if e.nitterInstance == "" {
+		return nil, fmt.Errorf("nitter instance not configured")
+	}
+
+	// src.URL is the username or path, e.g. "bestducksdaily"
+	username := strings.TrimPrefix(src.URL, "@")
+	rssURL := strings.TrimSuffix(e.nitterInstance, "/") + "/" + username + "/media/rss"
+
+	e.logger.Info("fetching nitter RSS", "source", src.Name, "url", rssURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rssURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "quack-scraper/1.0 (duck image collector)")
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", rssURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch %s: status %d", rssURL, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var feed nitterRSS
+	if err := xml.Unmarshal(body, &feed); err != nil {
+		return nil, fmt.Errorf("parse nitter RSS: %w", err)
+	}
+
+	imgRe := regexp.MustCompile(`<img\s+src="([^"]+)"`)
+
+	var results []Result
+	for _, item := range feed.Channel.Items {
+		// Extract tweet ID from the link URL (last path segment)
+		parts := strings.Split(strings.TrimSuffix(item.Link, "/"), "/")
+		tweetID := parts[len(parts)-1]
+
+		// Find all image URLs in the description HTML
+		matches := imgRe.FindAllStringSubmatch(item.Description, -1)
+		for i, m := range matches {
+			imgURL := m[1]
+
+			// Nitter proxies images — convert to direct Twitter CDN URL
+			// Nitter URLs look like: /pic/media%2F... or /pic/orig/media%2F...
+			if strings.Contains(imgURL, "/pic/") {
+				imgURL = nitterToDirectURL(e.nitterInstance, imgURL)
+			}
+
+			if imgURL == "" {
+				continue
+			}
+
+			ext := filepath.Ext(imgURL)
+			if idx := strings.Index(ext, "?"); idx > 0 {
+				ext = ext[:idx]
+			}
+			if ext == "" {
+				ext = ".jpg"
+			}
+
+			sourceID := tweetID
+			if i > 0 {
+				sourceID = fmt.Sprintf("%s_%d", tweetID, i)
+			}
+
+			results = append(results, Result{
+				URL:       imgURL,
+				Source:    src.Name,
+				SourceID:  sourceID,
+				SourceURL: item.Link,
+				Extension: ext,
+			})
+		}
+	}
+
+	e.logger.Info("nitter scrape completed", "source", src.Name, "results", len(results))
+	return results, nil
+}
+
+type nitterRSS struct {
+	XMLName xml.Name `xml:"rss"`
+	Channel struct {
+		Items []nitterItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type nitterItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
+	GUID        string `xml:"guid"`
+}
+
+// nitterToDirectURL converts a Nitter proxied image path to a direct pbs.twimg.com URL.
+func nitterToDirectURL(instance, imgPath string) string {
+	// If it's already a full URL, use as-is
+	if strings.HasPrefix(imgPath, "http") {
+		return imgPath
+	}
+
+	// Nitter proxies: /pic/orig/media%2F... -> https://pbs.twimg.com/media/...
+	// or /pic/media%2F... -> https://pbs.twimg.com/media/...
+	path := imgPath
+	path = strings.TrimPrefix(path, "/pic/orig/")
+	path = strings.TrimPrefix(path, "/pic/")
+
+	// URL-decode the path
+	decoded := strings.ReplaceAll(path, "%2F", "/")
+
+	return "https://pbs.twimg.com/" + decoded
 }
