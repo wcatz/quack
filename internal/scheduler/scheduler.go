@@ -111,6 +111,10 @@ func (s *Scheduler) runScrapeCount(ctx context.Context, src scraper.Source) (new
 		if ext == "" {
 			ext = filepath.Ext(r.URL)
 		}
+		// Normalize .gifv to .gif
+		if ext == ".gifv" {
+			ext = ".gif"
+		}
 		if ext == "" {
 			ext = ".jpg"
 		}

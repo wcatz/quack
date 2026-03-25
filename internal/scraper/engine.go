@@ -47,6 +47,8 @@ func (e *Engine) Scrape(ctx context.Context, src Source) ([]Result, error) {
 		return e.scrapeReddit(ctx, src)
 	case TypeNitter:
 		return e.scrapeNitter(ctx, src)
+	case TypeTenor:
+		return e.scrapeTenor(ctx, src)
 	default:
 		return nil, fmt.Errorf("unknown source type: %s", src.Type)
 	}
@@ -54,10 +56,16 @@ func (e *Engine) Scrape(ctx context.Context, src Source) ([]Result, error) {
 
 // Download fetches the media bytes from a URL.
 func (e *Engine) Download(ctx context.Context, url string) ([]byte, error) {
+	// Convert imgur .gifv to actual .gif
+	if strings.Contains(url, "imgur.com") && strings.HasSuffix(url, ".gifv") {
+		url = strings.TrimSuffix(url, "v")
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("User-Agent", "quack-scraper/1.0 (duck image collector)")
 
 	resp, err := e.httpClient.Do(req)
 	if err != nil {
@@ -473,4 +481,82 @@ func nitterToDirectURL(instance, imgPath string) string {
 	decoded := strings.ReplaceAll(path, "%2F", "/")
 
 	return "https://pbs.twimg.com/" + decoded
+}
+
+// scrapeTenor searches Tenor for GIFs matching the source URL (used as search query).
+func (e *Engine) scrapeTenor(ctx context.Context, src Source) ([]Result, error) {
+	// src.URL is the search query, e.g. "duck" or "duckling"
+	// src.Args[0] is the API key if provided
+	apiKey := "AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ" // public Tenor key
+	if len(src.Args) > 0 {
+		apiKey = src.Args[0]
+	}
+
+	limit := 50
+	tenorURL := fmt.Sprintf("https://tenor.googleapis.com/v2/search?q=%s&key=%s&media_filter=gif&limit=%d",
+		src.URL, apiKey, limit)
+
+	e.logger.Info("fetching tenor GIFs", "source", src.Name, "query", src.URL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tenorURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch tenor: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("tenor API status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read tenor response: %w", err)
+	}
+
+	var tenorResp tenorSearchResponse
+	if err := json.Unmarshal(body, &tenorResp); err != nil {
+		return nil, fmt.Errorf("parse tenor response: %w", err)
+	}
+
+	var results []Result
+	for _, item := range tenorResp.Results {
+		gifFormat, ok := item.MediaFormats["gif"]
+		if !ok {
+			continue
+		}
+
+		results = append(results, Result{
+			URL:       gifFormat.URL,
+			Source:    src.Name,
+			SourceID:  item.ID,
+			SourceURL: item.ItemURL,
+			Extension: ".gif",
+		})
+	}
+
+	e.logger.Info("tenor scrape completed", "source", src.Name, "results", len(results))
+	return results, nil
+}
+
+type tenorSearchResponse struct {
+	Results []tenorResult `json:"results"`
+	Next    string        `json:"next"`
+}
+
+type tenorResult struct {
+	ID           string                     `json:"id"`
+	Title        string                     `json:"title"`
+	ItemURL      string                     `json:"itemurl"`
+	MediaFormats map[string]tenorMediaFormat `json:"media_formats"`
+}
+
+type tenorMediaFormat struct {
+	URL  string `json:"url"`
+	Dims []int  `json:"dims"`
+	Size int    `json:"size"`
 }
