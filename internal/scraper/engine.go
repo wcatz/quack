@@ -344,7 +344,7 @@ func (e *Engine) scrapeNitter(ctx context.Context, src Source) ([]Result, error)
 
 	// src.URL is the username or path, e.g. "bestducksdaily"
 	username := strings.TrimPrefix(src.URL, "@")
-	rssURL := strings.TrimSuffix(e.nitterInstance, "/") + "/" + username + "/media/rss"
+	rssURL := strings.TrimSuffix(e.nitterInstance, "/") + "/" + username + "/rss"
 
 	e.logger.Info("fetching nitter RSS", "source", src.Name, "url", rssURL)
 
@@ -378,9 +378,13 @@ func (e *Engine) scrapeNitter(ctx context.Context, src Source) ([]Result, error)
 
 	var results []Result
 	for _, item := range feed.Channel.Items {
-		// Extract tweet ID from the link URL (last path segment)
-		parts := strings.Split(strings.TrimSuffix(item.Link, "/"), "/")
-		tweetID := parts[len(parts)-1]
+		// Extract tweet ID from GUID or link URL
+		tweetID := item.GUID
+		if tweetID == "" {
+			link := strings.Split(strings.TrimSuffix(item.Link, "/"), "#")[0]
+			parts := strings.Split(link, "/")
+			tweetID = parts[len(parts)-1]
+		}
 
 		// Find all image URLs in the description HTML
 		matches := imgRe.FindAllStringSubmatch(item.Description, -1)
@@ -439,20 +443,23 @@ type nitterItem struct {
 	GUID        string `xml:"guid"`
 }
 
-// nitterToDirectURL converts a Nitter proxied image path to a direct pbs.twimg.com URL.
+// nitterToDirectURL converts a Nitter proxied image URL to a direct pbs.twimg.com URL.
 func nitterToDirectURL(instance, imgPath string) string {
-	// If it's already a full URL, use as-is
-	if strings.HasPrefix(imgPath, "http") {
-		return imgPath
+	// Strip any Nitter instance prefix from full URLs
+	path := imgPath
+	if strings.HasPrefix(path, "http") {
+		if idx := strings.Index(path, "/pic/"); idx >= 0 {
+			path = path[idx:]
+		} else {
+			return path
+		}
 	}
 
-	// Nitter proxies: /pic/orig/media%2F... -> https://pbs.twimg.com/media/...
-	// or /pic/media%2F... -> https://pbs.twimg.com/media/...
-	path := imgPath
+	// /pic/orig/media%2F... -> https://pbs.twimg.com/media/...
+	// /pic/media%2F... -> https://pbs.twimg.com/media/...
 	path = strings.TrimPrefix(path, "/pic/orig/")
 	path = strings.TrimPrefix(path, "/pic/")
 
-	// URL-decode the path
 	decoded := strings.ReplaceAll(path, "%2F", "/")
 
 	return "https://pbs.twimg.com/" + decoded
