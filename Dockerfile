@@ -14,9 +14,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
 
 FROM python:3.12-slim-bookworm
 
-RUN pip install --no-cache-dir gallery-dl && \
-    apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip install --no-cache-dir gallery-dl
 
 WORKDIR /app
 COPY --from=builder /app/quack /app/quack
