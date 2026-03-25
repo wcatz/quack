@@ -9,7 +9,15 @@ import (
 )
 
 func (s *Server) handleRandom(w http.ResponseWriter, r *http.Request) {
-	s.serveRandom(w, r, "")
+	// Support ?type=gif|jpg for goduckbot compatibility
+	filter := ""
+	switch r.URL.Query().Get("type") {
+	case "gif":
+		filter = "gif"
+	case "jpg", "image":
+		filter = "image"
+	}
+	s.serveRandom(w, r, filter)
 }
 
 func (s *Server) handleRandomGIF(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +31,9 @@ func (s *Server) handleRandomImage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveRandom(w http.ResponseWriter, r *http.Request, filter string) {
 	key, ok := s.scheduler.RandomKey(filter)
 	if !ok {
-		http.Error(w, `{"error":"no ducks available"}`, http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"no ducks available"}`))
 		return
 	}
 
@@ -32,39 +42,44 @@ func (s *Server) serveRandom(w http.ResponseWriter, r *http.Request, filter stri
 		mediaType = "gif"
 	}
 
-	// JSON response mode
-	if r.URL.Query().Get("json") == "true" {
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-
-		url, err := s.s3.GetPublicURL(ctx, key, s.publicURL, 5*time.Minute)
-		if err != nil {
-			s.logger.Error("failed to get URL", "key", key, "error", err)
-			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"url":  url,
-			"type": mediaType,
-			"key":  key,
-		})
-		return
-	}
-
-	// Redirect mode (default)
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	url, err := s.s3.GetPublicURL(ctx, key, s.publicURL, 5*time.Minute)
 	if err != nil {
-		s.logger.Error("failed to get presigned URL", "key", key, "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		s.logger.Error("failed to get URL", "key", key, "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"internal error"}`))
 		return
 	}
 
-	http.Redirect(w, r, url, http.StatusFound)
+	// JSON is the default response mode (goduckbot compatibility)
+	// Use ?redirect=true for redirect mode
+	if r.URL.Query().Get("redirect") == "true" {
+		http.Redirect(w, r, url, http.StatusFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"url":  url,
+		"type": mediaType,
+		"key":  key,
+	})
+}
+
+func (s *Server) handleScrape(w http.ResponseWriter, r *http.Request) {
+	newCount, skipped := s.scheduler.RunAll(r.Context())
+	images, gifs := s.scheduler.Counts()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{
+		"new":     newCount,
+		"skipped": skipped,
+		"total":   images + gifs,
+		"images":  images,
+		"gifs":    gifs,
+	})
 }
 
 func (s *Server) handleCount(w http.ResponseWriter, r *http.Request) {

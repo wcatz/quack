@@ -43,6 +43,7 @@ func NewServer(sched *scheduler.Scheduler, s3Client *storage.S3Client, publicURL
 		r.Get("/random/image", s.handleRandomImage)
 		r.Get("/count", s.handleCount)
 		r.Get("/health", s.handleHealth)
+		r.Post("/scrape", s.handleScrape)
 	})
 
 	// Serve embedded frontend

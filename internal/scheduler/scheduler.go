@@ -23,8 +23,9 @@ type Scheduler struct {
 	s3      *storage.S3Client
 	logger  *slog.Logger
 
-	mu    sync.RWMutex
-	index []string // in-memory list of all object keys
+	mu      sync.RWMutex
+	index   []string // in-memory list of all object keys
+	sources []scraper.Source
 }
 
 func New(engine *scraper.Engine, dedupStore *dedup.Store, s3Client *storage.S3Client, logger *slog.Logger) *Scheduler {
@@ -53,6 +54,7 @@ func (s *Scheduler) Start(sources []scraper.Source) error {
 		s.logger.Info("scheduled source", "name", src.Name, "schedule", src.Schedule)
 	}
 
+	s.sources = sources
 	s.cron.Start()
 
 	// Run initial scrape for all sources
@@ -65,12 +67,26 @@ func (s *Scheduler) Start(sources []scraper.Source) error {
 	return nil
 }
 
+// RunAll triggers an immediate scrape of all sources. Returns new/skipped counts.
+func (s *Scheduler) RunAll(ctx context.Context) (newCount, skippedCount int) {
+	for _, src := range s.sources {
+		n, sk := s.runScrapeCount(ctx, src)
+		newCount += n
+		skippedCount += sk
+	}
+	return
+}
+
 func (s *Scheduler) Stop() {
 	ctx := s.cron.Stop()
 	<-ctx.Done()
 }
 
 func (s *Scheduler) runScrape(ctx context.Context, src scraper.Source) {
+	s.runScrapeCount(ctx, src)
+}
+
+func (s *Scheduler) runScrapeCount(ctx context.Context, src scraper.Source) (newCount, skipCount int) {
 	s.logger.Info("starting scrape", "source", src.Name)
 
 	results, err := s.engine.Scrape(ctx, src)
@@ -78,8 +94,6 @@ func (s *Scheduler) runScrape(ctx context.Context, src scraper.Source) {
 		s.logger.Error("scrape failed", "source", src.Name, "error", err)
 		return
 	}
-
-	var newCount, skipCount int
 	for _, r := range results {
 		if s.dedup.Seen(r.Source, r.SourceID) {
 			skipCount++
@@ -154,6 +168,7 @@ func (s *Scheduler) runScrape(ctx context.Context, src scraper.Source) {
 		"skipped", skipCount,
 		"total_index", s.IndexSize(),
 	)
+	return
 }
 
 // RandomKey returns a random object key from the index.

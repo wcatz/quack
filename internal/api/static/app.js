@@ -7,9 +7,9 @@ async function fetchDuck() {
   img.classList.remove("loaded");
   loading.classList.remove("hidden");
 
-  let url = "/api/v1/random?json=true";
-  if (currentFilter === "gif") url = "/api/v1/random/gif?json=true";
-  else if (currentFilter === "image") url = "/api/v1/random/image?json=true";
+  let url = "/api/v1/random";
+  if (currentFilter === "gif") url = "/api/v1/random/gif";
+  else if (currentFilter === "image") url = "/api/v1/random/image";
 
   try {
     const resp = await fetch(url);
@@ -36,6 +36,29 @@ function setFilter(el, filter) {
   document.querySelectorAll(".filter").forEach((b) => b.classList.remove("active"));
   el.classList.add("active");
   fetchDuck();
+}
+
+async function findDucks() {
+  const btn = document.getElementById("btn-find");
+  btn.disabled = true;
+  btn.textContent = "Searching...";
+
+  try {
+    const resp = await fetch("/api/v1/scrape", { method: "POST" });
+    if (!resp.ok) {
+      btn.textContent = "Error";
+      setTimeout(() => { btn.textContent = "Find Ducks"; btn.disabled = false; }, 2000);
+      return;
+    }
+    const data = await resp.json();
+    btn.textContent = `+${data.new} new`;
+    updateStats();
+    if (data.new > 0) fetchDuck();
+    setTimeout(() => { btn.textContent = "Find Ducks"; btn.disabled = false; }, 2000);
+  } catch {
+    btn.textContent = "Find Ducks";
+    btn.disabled = false;
+  }
 }
 
 async function updateStats() {
