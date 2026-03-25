@@ -227,7 +227,17 @@ func (e *Engine) scrapeHTTPAPI(ctx context.Context, src Source) ([]Result, error
 
 // scrapeReddit fetches posts from Reddit's JSON API and extracts image URLs.
 func (e *Engine) scrapeReddit(ctx context.Context, src Source) ([]Result, error) {
-	jsonURL := strings.TrimSuffix(src.URL, "/") + "/hot.json?limit=100&raw_json=1"
+	// Build JSON URL: subreddit pages get /hot.json, search URLs get .json suffix
+	var jsonURL string
+	if strings.Contains(src.URL, "/search") {
+		if strings.Contains(src.URL, "?") {
+			jsonURL = strings.Replace(src.URL, "/search?", "/search.json?", 1) + "&raw_json=1&limit=100"
+		} else {
+			jsonURL = src.URL + ".json?raw_json=1&limit=100"
+		}
+	} else {
+		jsonURL = strings.TrimSuffix(src.URL, "/") + "/hot.json?limit=100&raw_json=1"
+	}
 
 	e.logger.Info("fetching reddit JSON", "source", src.Name, "url", jsonURL)
 
