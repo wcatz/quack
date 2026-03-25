@@ -99,14 +99,23 @@ func (s *Server) handleModerate(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 
-				if len(data) > 10*1024*1024 {
+				// Skip non-image files (e.g. mp4 that slipped through)
+				lower := strings.ToLower(key)
+				if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, ".webm") {
 					res.Action = "skipped"
-					res.Error = "too large"
+					res.Error = "video file"
 					results <- res
 					return
 				}
 
-				ct := detectMediaType(key)
+				if len(data) > 5*1024*1024 {
+					res.Action = "skipped"
+					res.Error = "too large for API"
+					results <- res
+					return
+				}
+
+				ct := detectMediaType(data)
 
 				class, err := classifyImage(r.Context(), apiKey, data, ct, model)
 				if err != nil {
@@ -186,18 +195,21 @@ func (s *Server) handleModerate(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-func detectMediaType(key string) string {
-	lower := strings.ToLower(key)
-	switch {
-	case strings.HasSuffix(lower, ".png"):
-		return "image/png"
-	case strings.HasSuffix(lower, ".gif"):
-		return "image/gif"
-	case strings.HasSuffix(lower, ".webp"):
-		return "image/webp"
-	default:
+func detectMediaType(data []byte) string {
+	// Detect from magic bytes, not file extension
+	if len(data) >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
 		return "image/jpeg"
 	}
+	if len(data) >= 8 && string(data[:8]) == "\x89PNG\r\n\x1a\n" {
+		return "image/png"
+	}
+	if len(data) >= 4 && string(data[:4]) == "GIF8" {
+		return "image/gif"
+	}
+	if len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
+		return "image/webp"
+	}
+	return "image/jpeg"
 }
 
 func classifyImage(ctx context.Context, apiKey string, data []byte, mediaType, model string) (string, error) {
