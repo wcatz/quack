@@ -1,0 +1,6 @@
+quack
+*.db
+/data/
+/tmp/
+config.yaml
+.env

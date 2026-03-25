@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>quack</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>quack</h1>
+    <div class="duck-frame" id="duck-frame">
+      <img id="duck-img" alt="a duck" />
+      <div class="loading" id="loading">loading duck...</div>
+    </div>
+    <div class="controls">
+      <button id="btn-new" onclick="fetchDuck()">New Duck</button>
+      <div class="filters">
+        <button class="filter active" data-filter="" onclick="setFilter(this, '')">All</button>
+        <button class="filter" data-filter="image" onclick="setFilter(this, 'image')">Images</button>
+        <button class="filter" data-filter="gif" onclick="setFilter(this, 'gif')">GIFs</button>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

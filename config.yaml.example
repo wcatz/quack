@@ -1,0 +1,34 @@
+server:
+  port: 8080
+  adminToken: ""
+
+minio:
+  endpoint: "http://minio.roller.svc.cluster.local:9000"
+  region: "us-east-1"
+  accessKey: ""
+  secretKey: ""
+  bucket: "ducks"
+  publicURL: ""
+
+storage:
+  dbPath: "/data/quack.db"
+
+scraper:
+  galleryDlPath: "/usr/local/bin/gallery-dl"
+  downloadDir: "/tmp/downloads"
+  concurrency: 2
+
+sources:
+  - name: "twitter-duckposter"
+    type: "gallery-dl"
+    url: "https://twitter.com/theduckposter"
+    schedule: "0 */6 * * *"
+    args: ["--range", "1-50"]
+
+  - name: "random-duk"
+    type: "http-api"
+    url: "https://random-d.uk/api/v2/random"
+    schedule: "*/30 * * * *"
+
+log:
+  level: "info"
