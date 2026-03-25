@@ -216,6 +216,34 @@ func (s *Scheduler) IndexSize() int {
 	return len(s.index)
 }
 
+// DeleteKey removes an object key from the in-memory index and dedup store.
+func (s *Scheduler) DeleteKey(key string) {
+	s.mu.Lock()
+	for i, k := range s.index {
+		if k == key {
+			s.index = append(s.index[:i], s.index[i+1:]...)
+			break
+		}
+	}
+	s.mu.Unlock()
+
+	s.dedup.RemoveByKey(key)
+	mediaType := "images"
+	if strings.HasPrefix(key, "gifs/") {
+		mediaType = "gifs"
+	}
+	s.dedup.DecrementCount(mediaType)
+}
+
+// AllKeys returns a copy of all indexed object keys.
+func (s *Scheduler) AllKeys() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	keys := make([]string, len(s.index))
+	copy(keys, s.index)
+	return keys
+}
+
 // Counts returns the number of images and gifs from the dedup store.
 func (s *Scheduler) Counts() (images, gifs int) {
 	return s.dedup.Counts()
