@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -494,7 +495,7 @@ func (e *Engine) scrapeTenor(ctx context.Context, src Source) ([]Result, error) 
 
 	limit := 50
 	tenorURL := fmt.Sprintf("https://tenor.googleapis.com/v2/search?q=%s&key=%s&media_filter=gif&limit=%d",
-		src.URL, apiKey, limit)
+		url.QueryEscape(src.URL), apiKey, limit)
 
 	e.logger.Info("fetching tenor GIFs", "source", src.Name, "query", src.URL)
 
