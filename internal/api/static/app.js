@@ -39,29 +39,6 @@ function setFilter(el, filter) {
   fetchDuck();
 }
 
-async function findDucks() {
-  const btn = document.getElementById("btn-find");
-  btn.disabled = true;
-  btn.textContent = "🔍 Searching...";
-
-  try {
-    const resp = await fetch("/api/v1/scrape", { method: "POST" });
-    if (!resp.ok) {
-      btn.textContent = "Error";
-      setTimeout(() => { btn.textContent = "🔍 Find Ducks"; btn.disabled = false; }, 2000);
-      return;
-    }
-    const data = await resp.json();
-    btn.textContent = `+${data.new} ducks!`;
-    updateStats();
-    if (data.new > 0) fetchDuck();
-    setTimeout(() => { btn.textContent = "🔍 Find Ducks"; btn.disabled = false; }, 2000);
-  } catch {
-    btn.textContent = "🔍 Find Ducks";
-    btn.disabled = false;
-  }
-}
-
 async function updateStats() {
   try {
     const resp = await fetch("/api/v1/count");

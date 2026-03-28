@@ -94,32 +94,6 @@ h1 {
   transform: scale(0.95);
 }
 
-#btn-find {
-  background: #16213e;
-  color: #f5c542;
-  border: 2px solid #f5c54266;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-#btn-find:hover {
-  border-color: #f5c542;
-  background: #0f3460;
-}
-
-#btn-find:active {
-  transform: scale(0.95);
-}
-
-#btn-find:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
 .filters {
   display: flex;
   justify-content: center;
@@ -314,6 +288,41 @@ h1 {
   color: #e74c3c;
 }
 
+.gallery-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.gallery-pager span {
+  color: #888;
+  padding: 0 0.5rem;
+}
+
+.gallery-pager button {
+  background: #16213e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  padding: 0.35rem 0.75rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.gallery-pager button:hover:not(:disabled) {
+  border-color: #f5c542;
+  color: #f5c542;
+}
+
+.gallery-pager button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -367,6 +376,12 @@ h1 {
 .gallery-delete:hover {
   background: #e74c3c;
   color: #fff;
+}
+
+.gallery-card.deleted {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.3s;
 }
 
 .hidden {
