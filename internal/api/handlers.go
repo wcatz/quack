@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,14 +104,34 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGallery(w http.ResponseWriter, r *http.Request) {
 	keys := s.scheduler.AllKeys()
 
+	// Pagination: ?offset=0&limit=20
+	limit := 20
+	offset := 0
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 && v <= 100 {
+		limit = v
+	}
+	if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && v >= 0 {
+		offset = v
+	}
+
+	total := len(keys)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	page := keys[offset:end]
+
 	type item struct {
 		Key  string `json:"key"`
 		URL  string `json:"url"`
 		Type string `json:"type"`
 	}
 
-	items := make([]item, 0, len(keys))
-	for _, k := range keys {
+	items := make([]item, 0, len(page))
+	for _, k := range page {
 		url, _ := s.s3.GetPublicURL(r.Context(), k, s.publicURL, 5*time.Minute)
 		t := "image"
 		if strings.HasPrefix(k, "gifs/") {
@@ -119,7 +141,12 @@ func (s *Server) handleGallery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"items":  items,
+		"total":  total,
+		"offset": offset,
+		"limit":  limit,
+	})
 }
 
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
@@ -149,5 +176,66 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "deleted",
 		"key":    key,
+	})
+}
+
+func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
+	maxSize := int64(8 * 1024 * 1024) // default 8MB
+	if q := r.URL.Query().Get("max_size"); q != "" {
+		if v, err := strconv.ParseInt(q, 10, 64); err == nil && v > 0 {
+			maxSize = v
+		}
+	}
+	dryRun := r.URL.Query().Get("dry_run") != "false"
+
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	type oversizedItem struct {
+		Key  string `json:"key"`
+		Size string `json:"size"`
+	}
+
+	var found []oversizedItem
+	var deleted []oversizedItem
+
+	for _, prefix := range []string{"images/", "gifs/"} {
+		objects, err := s.s3.ListObjectsWithSize(ctx, prefix)
+		if err != nil {
+			s.logger.Error("cleanup list failed", "prefix", prefix, "error", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		for _, obj := range objects {
+			if obj.Size > maxSize {
+				item := oversizedItem{
+					Key:  obj.Key,
+					Size: fmt.Sprintf("%.2f MB", float64(obj.Size)/(1024*1024)),
+				}
+				found = append(found, item)
+
+				if !dryRun {
+					if err := s.s3.Delete(ctx, obj.Key); err != nil {
+						s.logger.Error("cleanup delete failed", "key", obj.Key, "error", err)
+						continue
+					}
+					s.scheduler.DeleteKey(obj.Key)
+					s.logger.Info("cleanup deleted oversized file", "key", obj.Key, "size", obj.Size)
+					deleted = append(deleted, item)
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"max_size_bytes": maxSize,
+		"dry_run":        dryRun,
+		"found":          len(found),
+		"deleted":        len(deleted),
+		"oversized":      found,
 	})
 }

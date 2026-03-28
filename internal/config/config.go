@@ -39,6 +39,7 @@ type ScraperConfig struct {
 	DownloadDir    string `mapstructure:"downloadDir"`
 	Concurrency    int    `mapstructure:"concurrency"`
 	NitterInstance string `mapstructure:"nitterInstance"`
+	MaxFileSize    int64  `mapstructure:"maxFileSize"` // bytes, 0 = unlimited
 }
 
 type Source struct {
@@ -64,6 +65,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("scraper.galleryDlPath", "/usr/local/bin/gallery-dl")
 	v.SetDefault("scraper.downloadDir", "/tmp/downloads")
 	v.SetDefault("scraper.concurrency", 2)
+	v.SetDefault("scraper.maxFileSize", 8388608) // 8MB
 	v.SetDefault("log.level", "info")
 
 	// Env var overrides

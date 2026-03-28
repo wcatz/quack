@@ -17,24 +17,26 @@ import (
 )
 
 type Scheduler struct {
-	cron    *cron.Cron
-	engine  *scraper.Engine
-	dedup   *dedup.Store
-	s3      *storage.S3Client
-	logger  *slog.Logger
+	cron        *cron.Cron
+	engine      *scraper.Engine
+	dedup       *dedup.Store
+	s3          *storage.S3Client
+	logger      *slog.Logger
+	maxFileSize int64
 
 	mu      sync.RWMutex
 	index   []string // in-memory list of all object keys
 	sources []scraper.Source
 }
 
-func New(engine *scraper.Engine, dedupStore *dedup.Store, s3Client *storage.S3Client, logger *slog.Logger) *Scheduler {
+func New(engine *scraper.Engine, dedupStore *dedup.Store, s3Client *storage.S3Client, maxFileSize int64, logger *slog.Logger) *Scheduler {
 	return &Scheduler{
-		cron:   cron.New(),
-		engine: engine,
-		dedup:  dedupStore,
-		s3:     s3Client,
-		logger: logger,
+		cron:        cron.New(),
+		engine:      engine,
+		dedup:       dedupStore,
+		s3:          s3Client,
+		maxFileSize: maxFileSize,
+		logger:      logger,
 	}
 }
 
@@ -103,6 +105,18 @@ func (s *Scheduler) runScrapeCount(ctx context.Context, src scraper.Source) (new
 		data, err := s.engine.Download(ctx, r.URL)
 		if err != nil {
 			s.logger.Warn("download failed", "url", r.URL, "error", err)
+			continue
+		}
+
+		if s.maxFileSize > 0 && int64(len(data)) > s.maxFileSize {
+			s.logger.Warn("skipping oversized file",
+				"url", r.URL,
+				"size", len(data),
+				"max", s.maxFileSize,
+				"source", r.Source,
+			)
+			s.dedup.Mark(r.Source, r.SourceID, "oversized")
+			skipCount++
 			continue
 		}
 

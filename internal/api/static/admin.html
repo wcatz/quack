@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>quack admin</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container admin-page">
+    <h1>🦆 quack admin</h1>
+    <div class="admin-login" id="admin-login">
+      <input type="password" id="admin-token" placeholder="Admin token" onkeydown="if(event.key==='Enter')adminLogin()" />
+      <button onclick="adminLogin()">Unlock</button>
+    </div>
+    <div class="admin-content hidden" id="admin-content">
+      <div class="admin-actions">
+        <button id="btn-gallery" onclick="loadGallery()">🖼️ Gallery</button>
+        <button id="btn-scrape" onclick="runScrape()">🔍 Find Ducks</button>
+        <button id="btn-cleanup" onclick="runCleanup(true)">📏 Scan Oversized</button>
+        <button id="btn-cleanup-run" class="danger" onclick="runCleanup(false)">🗑️ Purge Oversized</button>
+      </div>
+      <div class="cleanup-result hidden" id="cleanup-result"></div>
+      <div class="gallery-pager hidden" id="gallery-pager"></div>
+      <div class="gallery-grid hidden" id="gallery-grid"></div>
+      <div class="gallery-pager hidden" id="gallery-pager-bottom"></div>
+    </div>
+  </div>
+  <script src="/admin.js"></script>
+</body>
+</html>

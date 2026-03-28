@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>quack</title>
+  <title>quack!</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦆</text></svg>">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div class="container">
-    <h1>quack</h1>
+    <h1>🦆 quack!</h1>
     <div class="duck-frame" id="duck-frame">
       <img id="duck-img" alt="a duck" />
-      <div class="loading" id="loading">loading duck...</div>
+      <div class="loading" id="loading">fetching a duck...</div>
     </div>
     <div class="controls">
-      <button id="btn-new" onclick="fetchDuck()">New Duck</button>
-      <button id="btn-find" onclick="findDucks()">Find Ducks</button>
-      <div class="filters">
-        <button class="filter active" data-filter="" onclick="setFilter(this, '')">All</button>
-        <button class="filter" data-filter="image" onclick="setFilter(this, 'image')">Images</button>
-        <button class="filter" data-filter="gif" onclick="setFilter(this, 'gif')">GIFs</button>
-      </div>
+      <button id="btn-new" onclick="fetchDuck()">🦆 Quack!</button>
+    </div>
+    <div class="filters">
+      <button class="filter active" data-filter="" onclick="setFilter(this, '')">All</button>
+      <button class="filter" data-filter="image" onclick="setFilter(this, 'image')">📷 Photos</button>
+      <button class="filter" data-filter="gif" onclick="setFilter(this, 'gif')">🎞️ GIFs</button>
     </div>
     <div class="stats" id="stats"></div>
     <details class="api-docs">
@@ -41,10 +41,6 @@
         <div class="api-item">
           <code>GET /api/v1/count</code>
           <span>Collection stats</span>
-        </div>
-        <div class="api-item">
-          <code>POST /api/v1/scrape</code>
-          <span>Trigger scrape run</span>
         </div>
       </div>
     </details>
