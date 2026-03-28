@@ -48,8 +48,8 @@ func NewServer(sched *scheduler.Scheduler, s3Client *storage.S3Client, publicURL
 		r.Get("/health", s.handleHealth)
 
 		r.Route("/admin", func(r chi.Router) {
-			r.Post("/scrape", s.handleScrape)
 			r.Use(s.adminAuth)
+			r.Post("/scrape", s.handleScrape)
 			r.Get("/gallery", s.handleGallery)
 			r.Delete("/images/*", s.handleDelete)
 			r.Post("/moderate", s.handleModerate)
