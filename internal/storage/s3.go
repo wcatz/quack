@@ -131,6 +131,35 @@ func (s *S3Client) ListKeys(ctx context.Context, prefix string) ([]string, error
 	return keys, nil
 }
 
+// ObjectInfo holds key and size for an S3 object.
+type ObjectInfo struct {
+	Key  string
+	Size int64
+}
+
+// ListObjectsWithSize returns all objects under prefix with their sizes.
+func (s *S3Client) ListObjectsWithSize(ctx context.Context, prefix string) ([]ObjectInfo, error) {
+	var objects []ObjectInfo
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("s3 list %s: %w", prefix, err)
+		}
+		for _, obj := range page.Contents {
+			objects = append(objects, ObjectInfo{
+				Key:  aws.ToString(obj.Key),
+				Size: aws.ToInt64(obj.Size),
+			})
+		}
+	}
+	return objects, nil
+}
+
 // ContentHash returns the SHA-256 hash (first 12 hex chars) of the given data.
 func ContentHash(data []byte) string {
 	h := sha256.Sum256(data)

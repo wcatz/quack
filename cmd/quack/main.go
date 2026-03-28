@@ -99,7 +99,7 @@ func main() {
 	}
 
 	// Scheduler
-	sched := scheduler.New(engine, dedupStore, s3Client, logger)
+	sched := scheduler.New(engine, dedupStore, s3Client, cfg.Scraper.MaxFileSize, logger)
 	if err := sched.Start(sources); err != nil {
 		logger.Error("failed to start scheduler", "error", err)
 		os.Exit(1)

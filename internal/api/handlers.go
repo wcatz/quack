@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,5 +151,66 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "deleted",
 		"key":    key,
+	})
+}
+
+func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
+	maxSize := int64(8 * 1024 * 1024) // default 8MB
+	if q := r.URL.Query().Get("max_size"); q != "" {
+		if v, err := strconv.ParseInt(q, 10, 64); err == nil && v > 0 {
+			maxSize = v
+		}
+	}
+	dryRun := r.URL.Query().Get("dry_run") != "false"
+
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	type oversizedItem struct {
+		Key  string `json:"key"`
+		Size string `json:"size"`
+	}
+
+	var found []oversizedItem
+	var deleted []oversizedItem
+
+	for _, prefix := range []string{"images/", "gifs/"} {
+		objects, err := s.s3.ListObjectsWithSize(ctx, prefix)
+		if err != nil {
+			s.logger.Error("cleanup list failed", "prefix", prefix, "error", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+
+		for _, obj := range objects {
+			if obj.Size > maxSize {
+				item := oversizedItem{
+					Key:  obj.Key,
+					Size: fmt.Sprintf("%.2f MB", float64(obj.Size)/(1024*1024)),
+				}
+				found = append(found, item)
+
+				if !dryRun {
+					if err := s.s3.Delete(ctx, obj.Key); err != nil {
+						s.logger.Error("cleanup delete failed", "key", obj.Key, "error", err)
+						continue
+					}
+					s.scheduler.DeleteKey(obj.Key)
+					s.logger.Info("cleanup deleted oversized file", "key", obj.Key, "size", obj.Size)
+					deleted = append(deleted, item)
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"max_size_bytes": maxSize,
+		"dry_run":        dryRun,
+		"found":          len(found),
+		"deleted":        len(deleted),
+		"oversized":      found,
 	})
 }

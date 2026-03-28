@@ -53,6 +53,7 @@ func NewServer(sched *scheduler.Scheduler, s3Client *storage.S3Client, publicURL
 			r.Get("/gallery", s.handleGallery)
 			r.Delete("/images/*", s.handleDelete)
 			r.Post("/moderate", s.handleModerate)
+			r.Post("/cleanup", s.handleCleanup)
 		})
 	})
 

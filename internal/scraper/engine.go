@@ -526,9 +526,13 @@ func (e *Engine) scrapeTenor(ctx context.Context, src Source) ([]Result, error) 
 
 	var results []Result
 	for _, item := range tenorResp.Results {
-		gifFormat, ok := item.MediaFormats["gif"]
+		// Prefer mediumgif (1-5MB) over gif (10-40MB) to avoid Telegram size limits
+		gifFormat, ok := item.MediaFormats["mediumgif"]
 		if !ok {
-			continue
+			gifFormat, ok = item.MediaFormats["gif"]
+			if !ok {
+				continue
+			}
 		}
 
 		results = append(results, Result{
