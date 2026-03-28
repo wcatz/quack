@@ -378,6 +378,13 @@ h1 {
   color: #fff;
 }
 
+.gallery-loading {
+  text-align: center;
+  color: #f5c54288;
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
 .gallery-card.deleted {
   opacity: 0;
   transform: scale(0.8);

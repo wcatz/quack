@@ -16,15 +16,14 @@
     </div>
     <div class="admin-content hidden" id="admin-content">
       <div class="admin-actions">
-        <button id="btn-gallery" onclick="loadGallery()">🖼️ Gallery</button>
         <button id="btn-scrape" onclick="runScrape()">🔍 Find Ducks</button>
         <button id="btn-cleanup" onclick="runCleanup(true)">📏 Scan Oversized</button>
         <button id="btn-cleanup-run" class="danger" onclick="runCleanup(false)">🗑️ Purge Oversized</button>
       </div>
       <div class="cleanup-result hidden" id="cleanup-result"></div>
+      <div class="gallery-grid" id="gallery-grid"></div>
+      <div class="gallery-loading hidden" id="gallery-loading">loading ducks...</div>
       <div class="gallery-pager hidden" id="gallery-pager"></div>
-      <div class="gallery-grid hidden" id="gallery-grid"></div>
-      <div class="gallery-pager hidden" id="gallery-pager-bottom"></div>
     </div>
   </div>
   <script src="/admin.js"></script>
